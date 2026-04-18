@@ -1,4 +1,4 @@
-name: Build APK for Android 6.0
+name: Build for Android 6.0
 
 on: [push]
 
@@ -14,10 +14,14 @@ jobs:
           distribution: 'temurin'
           java-version: '8'
 
-      - name: Create project files
+      - name: Create project structure
         run: |
           mkdir -p app/src/main/java/com/autohotspot
           mkdir -p app/src/main/res/values
+          mkdir -p gradle/wrapper
+
+      - name: Write AndroidManifest.xml
+        run: |
           cat > app/src/main/AndroidManifest.xml << 'EOF'
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
               package="com.autohotspot">
@@ -44,6 +48,9 @@ jobs:
               </application>
           </manifest>
           EOF
+
+      - name: Write Java classes
+        run: |
           cat > app/src/main/java/com/autohotspot/MainActivity.java << 'EOF'
           package com.autohotspot;
           import android.app.Activity;
@@ -55,9 +62,9 @@ jobs:
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
                   if (!Settings.System.canWrite(this)) {
-                      Toast.makeText(this, "Izin WRITE_SETTINGS diperlukan. Berikan secara manual di Pengaturan Aplikasi.", Toast.LENGTH_LONG).show();
+                      Toast.makeText(this, "Izin WRITE_SETTINGS diperlukan", Toast.LENGTH_LONG).show();
                   } else {
-                      Toast.makeText(this, "Auto Hotspot 'J2 Prime' tanpa password aktif saat booting.", Toast.LENGTH_SHORT).show();
+                      Toast.makeText(this, "Auto Hotspot aktif", Toast.LENGTH_SHORT).show();
                   }
                   finish();
               }
@@ -82,70 +89,48 @@ jobs:
           import android.content.Context;
           import android.net.wifi.WifiConfiguration;
           import android.net.wifi.WifiManager;
-          import android.util.Log;
           import java.lang.reflect.Method;
           public class HotspotHelper {
               public static void turnOnHotspot(Context context) {
                   try {
-                      WifiManager wifiManager = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
-                      if (wifiManager.isWifiEnabled()) {
-                          wifiManager.setWifiEnabled(false);
-                          Thread.sleep(1000);
-                      }
-                      WifiConfiguration netConfig = new WifiConfiguration();
-                      netConfig.SSID = "J2 Prime";
-                      netConfig.allowedKeyManagement.set(WifiConfiguration.KeyMgmt.NONE);
-                      Method method = wifiManager.getClass().getMethod("setWifiApEnabled", WifiConfiguration.class, boolean.class);
-                      method.invoke(wifiManager, netConfig, true);
-                      Log.d("HotspotHelper", "Hotspot 'J2 Prime' (open) turned on");
-                  } catch (Exception e) {
-                      Log.e("HotspotHelper", "Error: " + e.getMessage());
-                  }
+                      WifiManager wm = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
+                      if (wm.isWifiEnabled()) wm.setWifiEnabled(false);
+                      Thread.sleep(1000);
+                      WifiConfiguration config = new WifiConfiguration();
+                      config.SSID = "J2 Prime";
+                      config.allowedKeyManagement.set(WifiConfiguration.KeyMgmt.NONE);
+                      Method m = wm.getClass().getMethod("setWifiApEnabled", WifiConfiguration.class, boolean.class);
+                      m.invoke(wm, config, true);
+                  } catch (Exception e) { e.printStackTrace(); }
               }
           }
           EOF
-          cat > app/src/main/res/values/strings.xml << 'EOF'
-          <resources><string name="app_name">Auto Hotspot</string></resources>
-          EOF
-          cat > app/src/main/res/values/colors.xml << 'EOF'
-          <resources><color name="black">#000000</color></resources>
-          EOF
 
-      - name: Setup Gradle Wrapper
+      - name: Write resources
         run: |
-          mkdir -p gradle/wrapper
-          cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
-          distributionBase=GRADLE_USER_HOME
-          distributionPath=wrapper/dists
-          distributionUrl=https\://services.gradle.org/distributions/gradle-6.5-bin.zip
-          zipStoreBase=GRADLE_USER_HOME
-          zipStorePath=wrapper/dists
-          EOF
+          echo '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">Auto Hotspot</string></resources>' > app/src/main/res/values/strings.xml
+          echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="black">#000000</color></resources>' > app/src/main/res/values/colors.xml
+
+      - name: Setup Gradle 6.5 wrapper
+        run: |
+          echo "distributionBase=GRADLE_USER_HOME" > gradle/wrapper/gradle-wrapper.properties
+          echo "distributionPath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
+          echo "distributionUrl=https\\://services.gradle.org/distributions/gradle-6.5-bin.zip" >> gradle/wrapper/gradle-wrapper.properties
+          echo "zipStoreBase=GRADLE_USER_HOME" >> gradle/wrapper/gradle-wrapper.properties
+          echo "zipStorePath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
           curl -L -o gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v6.5.0/gradle/wrapper/gradle-wrapper.jar
-          cat > gradlew << 'EOF'
-          #!/bin/sh
-          exec java -cp gradle/wrapper/gradle-wrapper.jar org.gradle.wrapper.GradleWrapperMain "$@"
-          EOF
+          echo '#!/bin/sh' > gradlew
+          echo 'exec java -cp gradle/wrapper/gradle-wrapper.jar org.gradle.wrapper.GradleWrapperMain "$@"' >> gradlew
           chmod +x gradlew
 
-      - name: Create build.gradle files
+      - name: Write build.gradle files for API 23
         run: |
           cat > build.gradle << 'EOF'
           buildscript {
-              repositories {
-                  google()
-                  jcenter()
-              }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:4.1.0'
-              }
+              repositories { google(); jcenter() }
+              dependencies { classpath 'com.android.tools.build:gradle:4.1.0' }
           }
-          allprojects {
-              repositories {
-                  google()
-                  jcenter()
-              }
-          }
+          allprojects { repositories { google(); jcenter() } }
           EOF
           cat > app/build.gradle << 'EOF'
           apply plugin: 'com.android.application'
@@ -159,24 +144,14 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
-              buildTypes {
-                  release {
-                      minifyEnabled false
-                  }
-              }
+              buildTypes { release { minifyEnabled false } }
           }
-          dependencies {
-              implementation 'com.android.support:appcompat-v7:23.4.0'
-          }
+          dependencies { implementation 'com.android.support:appcompat-v7:23.4.0' }
           EOF
-          cat > settings.gradle << 'EOF'
-          include ':app'
-          EOF
-          cat > gradle.properties << 'EOF'
-          org.gradle.jvmargs=-Xmx2048m
-          android.useAndroidX=false
-          android.enableJetifier=false
-          EOF
+          echo "include ':app'" > settings.gradle
+          echo "org.gradle.jvmargs=-Xmx1536m" > gradle.properties
+          echo "android.useAndroidX=false" >> gradle.properties
+          echo "android.enableJetifier=false" >> gradle.properties
 
       - name: Build APK
         run: ./gradlew assembleRelease
