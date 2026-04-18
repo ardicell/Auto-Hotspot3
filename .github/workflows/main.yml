@@ -4,38 +4,23 @@ on: [push]
 
 jobs:
   build:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Set up JDK 8
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '8'
-      - name: Build with Gradle
+          java-version: '17'
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.0'
+      - name: Create project files
         run: |
-          # 1. Buat struktur direktori
           mkdir -p app/src/main/java/com/autohotspot
           mkdir -p app/src/main/res/values
-          mkdir -p gradle/wrapper
-          
-          # 2. Gradle wrapper 4.6
-          echo "distributionBase=GRADLE_USER_HOME" > gradle/wrapper/gradle-wrapper.properties
-          echo "distributionPath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
-          echo "distributionUrl=https\://services.gradle.org/distributions/gradle-4.6-bin.zip" >> gradle/wrapper/gradle-wrapper.properties
-          echo "zipStoreBase=GRADLE_USER_HOME" >> gradle/wrapper/gradle-wrapper.properties
-          echo "zipStorePath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
-          curl -s -L -o gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v4.6.0/gradle/wrapper/gradle-wrapper.jar
-          
-          # 3. gradlew
-          cat > gradlew << 'GRADLEW'
-          #!/bin/bash
-          exec java -cp gradle/wrapper/gradle-wrapper.jar org.gradle.wrapper.GradleWrapperMain "$@"
-          GRADLEW
-          chmod +x gradlew
-          
-          # 4. AndroidManifest.xml
-          cat > app/src/main/AndroidManifest.xml << 'MANIFEST'
+          cat > app/src/main/AndroidManifest.xml << 'EOF'
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
               package="com.autohotspot">
               <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
@@ -60,10 +45,8 @@ jobs:
                   </receiver>
               </application>
           </manifest>
-          MANIFEST
-          
-          # 5. MainActivity.java
-          cat > app/src/main/java/com/autohotspot/MainActivity.java << 'JAVA1'
+          EOF
+          cat > app/src/main/java/com/autohotspot/MainActivity.java << 'EOF'
           package com.autohotspot;
           import android.app.Activity;
           import android.os.Bundle;
@@ -81,10 +64,8 @@ jobs:
                   finish();
               }
           }
-          JAVA1
-          
-          # 6. BootReceiver.java
-          cat > app/src/main/java/com/autohotspot/BootReceiver.java << 'JAVA2'
+          EOF
+          cat > app/src/main/java/com/autohotspot/BootReceiver.java << 'EOF'
           package com.autohotspot;
           import android.content.BroadcastReceiver;
           import android.content.Context;
@@ -97,10 +78,8 @@ jobs:
                   }
               }
           }
-          JAVA2
-          
-          # 7. HotspotHelper.java
-          cat > app/src/main/java/com/autohotspot/HotspotHelper.java << 'JAVA3'
+          EOF
+          cat > app/src/main/java/com/autohotspot/HotspotHelper.java << 'EOF'
           package com.autohotspot;
           import android.content.Context;
           import android.net.wifi.WifiConfiguration;
@@ -126,18 +105,24 @@ jobs:
                   }
               }
           }
-          JAVA3
-          
-          # 8. build.gradle (app level)
-          cat > app/build.gradle << 'APPGRADLE'
-          apply plugin: 'com.android.application'
+          EOF
+          cat > app/src/main/res/values/strings.xml << 'EOF'
+          <resources><string name="app_name">Auto Hotspot</string></resources>
+          EOF
+          cat > app/src/main/res/values/colors.xml << 'EOF'
+          <resources><color name="black">#000000</color></resources>
+          EOF
+          cat > app/build.gradle << 'EOF'
+          plugins {
+              id 'com.android.application'
+          }
           android {
-              compileSdk 23
-              buildToolsVersion "23.0.3"
+              compileSdk 34
+              namespace 'com.autohotspot'
               defaultConfig {
                   applicationId "com.autohotspot"
                   minSdk 23
-                  targetSdk 23
+                  targetSdk 34
                   versionCode 1
                   versionName "1.0"
               }
@@ -148,46 +133,37 @@ jobs:
               }
           }
           dependencies {
-              implementation 'com.android.support:appcompat-v7:23.4.0'
+              implementation 'androidx.appcompat:appcompat:1.6.1'
           }
-          APPGRADLE
-          
-          # 9. build.gradle (root) - PASTIKAN TIDAK ADA KESALAHAN
-          cat > build.gradle << 'ROOTGRADLE'
-          buildscript {
+          EOF
+          cat > build.gradle << 'EOF'
+          plugins {
+              id 'com.android.application' version '8.1.0' apply false
+          }
+          EOF
+          cat > settings.gradle << 'EOF'
+          pluginManagement {
               repositories {
                   google()
-                  jcenter()
-              }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:3.0.1'
+                  mavenCentral()
+                  gradlePluginPortal()
               }
           }
-          allprojects {
+          dependencyResolutionManagement {
               repositories {
                   google()
-                  jcenter()
+                  mavenCentral()
               }
           }
-          ROOTGRADLE
-          
-          # 10. settings.gradle
-          echo "include ':app'" > settings.gradle
-          
-          # 11. gradle.properties
-          cat > gradle.properties << 'PROPS'
-          org.gradle.jvmargs=-Xmx1536m
-          android.useAndroidX=false
-          android.enableJetifier=false
-          PROPS
-          
-          # 12. resources
-          echo '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">Auto Hotspot</string></resources>' > app/src/main/res/values/strings.xml
-          echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="black">#000000</color></resources>' > app/src/main/res/values/colors.xml
-          
-          # 13. Build APKj
-          ./gradlew assembleRelease --no-daemon
-          
+          rootProject.name = "AutoHotspot"
+          include ':app'
+          EOF
+          cat > gradle.properties << 'EOF'
+          org.gradle.jvmargs=-Xmx2048m
+          android.useAndroidX=true
+          EOF
+      - name: Build APK
+        run: ./gradlew assembleRelease
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
