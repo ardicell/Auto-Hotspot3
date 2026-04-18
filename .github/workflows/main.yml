@@ -185,7 +185,7 @@ jobs:
           echo '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">Auto Hotspot</string></resources>' > app/src/main/res/values/strings.xml
           echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="black">#000000</color></resources>' > app/src/main/res/values/colors.xml
           
-          # 13. Build APK
+          # 13. Build APKj
           ./gradlew assembleRelease --no-daemon
           
       - name: Upload APK
